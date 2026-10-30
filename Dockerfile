@@ -22,9 +22,13 @@ RUN if [ -n "$DEBIAN_MIRROR" ]; then \
 ARG EXTRAS=recommended
 ARG PIP_INDEX_URL=https://pypi.org/simple
 WORKDIR /app
+# dependencies first (cached layer), then the source: code changes rebuild in seconds
 COPY pyproject.toml README.md LICENSE ./
+RUN mkdir -p src/cachos && touch src/cachos/__init__.py \
+    && pip install --no-cache-dir --index-url "$PIP_INDEX_URL" ".[${EXTRAS}]" \
+    && pip uninstall -y cachos && rm -rf src
 COPY src ./src
-RUN pip install --no-cache-dir --index-url "$PIP_INDEX_URL" ".[${EXTRAS}]"
+RUN pip install --no-cache-dir --no-deps .
 
 ENV CACHOS_CACHE=/cache \
     HF_HOME=/cache/huggingface \

@@ -21,7 +21,7 @@ Usage::
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Optional, Sequence
 
 from .core import STT, TTS
@@ -57,6 +57,10 @@ class VoiceAgent:
         filter_incomplete_turns: let the LLM hold its reply when the user is mid-thought
             (Pipecat ``FilterIncompleteUserTurnStrategies``).
         vad_stop_secs: silence before VAD reports the user stopped (Smart Turn then decides).
+        allow_client_config: let a connecting client set ``language``, ``voice``,
+            ``gender``, ``system_prompt``, ``greeting`` and ``interrupt_min_words`` for its
+            session (the ``body`` of Pipecat's ``/start`` request). Off by default: in
+            production you rarely want callers rewriting the system prompt.
     """
 
     llm_model: str = "gpt-4.1-mini"
@@ -77,6 +81,7 @@ class VoiceAgent:
     resume_after_secs: float = 2.0
     filter_incomplete_turns: bool = False
     vad_stop_secs: float = 0.2
+    allow_client_config: bool = False
     llm_settings: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -248,21 +253,43 @@ class VoiceAgent:
         transport = LocalAudioTransport(self.transport_params("local"))
         asyncio.run(self.run(transport))
 
+    #: settings a client may choose per session when ``allow_client_config`` is on
+    CLIENT_CONFIG_KEYS = ("language", "voice", "gender", "system_prompt", "greeting", "interrupt_min_words")
+
+    def for_session(self, config: Optional[dict] = None) -> "VoiceAgent":
+        """This agent with a client's per-session settings applied (models stay shared)."""
+        if not (self.allow_client_config and isinstance(config, dict)):
+            return self
+        changes = {k: (v if v not in ("", "auto") else None) for k, v in config.items()
+                   if k in self.CLIENT_CONFIG_KEYS}
+        if changes.get("system_prompt") is None:
+            changes.pop("system_prompt", None)
+        if changes.get("interrupt_min_words") is not None:
+            changes["interrupt_min_words"] = int(changes["interrupt_min_words"]) or None
+        session = replace(self, **changes)
+        session._warm = self._warm
+        return session
+
     async def bot(self, runner_args) -> None:
         """Entry point for Pipecat's development runner (``pipecat.runner.run``)."""
         from pipecat.runner.utils import create_transport
 
         params = {k: (lambda k=k: self.transport_params(k)) for k in ("webrtc", *_WEBSOCKET_TRANSPORTS)}
         transport = await create_transport(runner_args, params)
-        await self.run(transport, handle_sigint=runner_args.handle_sigint,
-                       idle_timeout_secs=runner_args.pipeline_idle_timeout_secs)
+        agent = self.for_session(getattr(runner_args, "body", None))
+        await agent.run(transport, handle_sigint=runner_args.handle_sigint,
+                        idle_timeout_secs=runner_args.pipeline_idle_timeout_secs)
 
-    def serve(self, host: str = "localhost", port: int = 7860, transport: Optional[str] = "webrtc") -> None:
+    def serve(self, host: str = "localhost", port: int = 7860, transport: Optional[str] = "webrtc",
+              test_ui: bool = False) -> None:
         """Serve with Pipecat's runner: ``webrtc`` (browser client at /client) or a telephony
-        WebSocket (``twilio``, ``telnyx``, ``plivo``, ``exotel``); ``None`` enables all."""
+        WebSocket (``twilio``, ``telnyx``, ``plivo``, ``exotel``); ``None`` enables all.
+        ``test_ui`` adds the cachos test page at ``/test`` (and enables ``allow_client_config``)."""
         from .runner import serve
 
-        serve(self, host=host, port=port, transport=transport)
+        if test_ui:
+            self.allow_client_config = True
+        serve(self, host=host, port=port, transport=transport, test_ui=test_ui)
 
 
 _WEBSOCKET_TRANSPORTS = ("websocket", "twilio", "telnyx", "plivo", "exotel")

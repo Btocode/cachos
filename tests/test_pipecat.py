@@ -166,6 +166,12 @@ async def test_queued_segments_are_merged_and_latency_measured_from_speech_end()
         seen.append(sec)
 
     svc._observe_latency = observe
+    messages = []
+
+    async def push_frame(frame, direction=None):
+        messages.append(frame)
+
+    svc.push_frame = push_frame
     pcm = lambda s: (tone(s) * 32767).astype(np.int16).tobytes()  # noqa: E731
     now = _time.monotonic()
     svc._segment_ended = {1: now - 2.0, 2: now - 1.0, 3: now}
@@ -174,8 +180,9 @@ async def test_queued_segments_are_merged_and_latency_measured_from_speech_end()
     svc._segment_queue.put_nowait(None)
     await asyncio.wait_for(svc._segment_task_handler(), 5)
     assert eng.durations == [1.75]  # one STT call for all three
-    assert svc._transcribing_segment == 3 and len(pushed) == 1
+    assert svc._transcribing_segment == 3 and sum(isinstance(f, TranscriptionFrame) for f in pushed) == 1
     assert len(seen) == 1 and 0 <= seen[0] < 0.5 and svc._segment_ended == {}
+    assert [m.data["type"] for m in messages] == ["cachos-stt-latency"]  # reported to RTVI clients
 
 
 async def test_stt_segments_in_one_turn_share_context_and_language():
@@ -266,3 +273,21 @@ async def test_pause_on_overlap_real_interruption_drops_held_audio():
         InterruptionFrame(), SleepFrame(sleep=0.3),               # real words -> Pipecat interrupts
     ])
     assert 1 <= len(rec.times) <= 5 and not gate.paused
+
+
+def test_client_session_config_is_opt_in_and_shares_models():
+    from cachos.agent import VoiceAgent
+
+    stt, tts = STT(FakeSTT()), TTS([FakeTTS()])
+    agent = VoiceAgent(stt=stt, tts=tts, llm_api_key="x", system_prompt="server prompt")
+    body = {"language": "fr", "voice": "fake:fr_m", "system_prompt": "be a pirate", "interrupt_min_words": 2,
+            "llm_api_key": "stolen", "denoise": None}
+    assert agent.for_session(body) is agent                      # ignored unless allowed
+    agent.allow_client_config = True
+    s = agent.for_session(body)
+    assert (s.language, s.voice, s.system_prompt, s.interrupt_min_words) == ("fr", "fake:fr_m", "be a pirate", 2)
+    assert s.llm_api_key == "x" and s.denoise == "gtcrn"         # only whitelisted keys
+    assert s.stt is stt and s.tts is tts                         # models shared, not reloaded
+    auto = agent.for_session({"language": "auto", "voice": "", "system_prompt": "", "interrupt_min_words": 0})
+    assert auto.language is None and auto.voice is None and auto.system_prompt == "server prompt"
+    assert auto.interrupt_min_words is None

@@ -102,7 +102,9 @@ def cmd_serve(args) -> None:
 
 def cmd_agent(args) -> None:
     transport = None if args.transport == "all" else args.transport
-    _agent(args).serve(host=args.host, port=args.port, transport=transport)
+    if args.test_ui:
+        print(f"cachos test page: http://{args.host}:{args.port}/test", file=sys.stderr)
+    _agent(args).serve(host=args.host, port=args.port, transport=transport, test_ui=args.test_ui)
 
 
 def cmd_chat(args) -> None:
@@ -192,6 +194,8 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--port", type=int, default=7860)
     sp.add_argument("-t", "--transport", default="webrtc",
                     choices=["webrtc", "twilio", "telnyx", "plivo", "exotel", "websocket", "all"])
+    sp.add_argument("--test-ui", action="store_true",
+                    help="serve the cachos test page at /test (lets the page pick language/voice/prompt)")
     add_agent(sp)
     sp.set_defaults(fn=cmd_agent)
 

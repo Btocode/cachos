@@ -47,6 +47,7 @@ from pipecat.frames.frames import (
     VADUserStoppedSpeakingFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+from pipecat.processors.frameworks.rtvi import RTVIServerMessageFrame
 from pipecat.services.settings import STTSettings, TTSSettings
 from pipecat.services.stt_service import SegmentedSTTService
 from pipecat.services.tts_service import TTSService
@@ -163,7 +164,10 @@ class CachosSTTService(SegmentedSTTService):
             for k in [k for k in self._segment_ended if k < number]:
                 del self._segment_ended[k]
             if ended is not None:
-                await self._observe_latency(time.monotonic() - ended)
+                latency = time.monotonic() - ended
+                await self._observe_latency(latency)
+                await self.push_frame(RTVIServerMessageFrame(
+                    data={"type": "cachos-stt-latency", "seconds": round(latency, 3)}))
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
@@ -202,6 +206,9 @@ class CachosSTTService(SegmentedSTTService):
         self._turn_text = [*turn_text, text]
         self._turn_language = self._turn_language or t.language
         logger.debug(f"{self}: [{t.language} {t.language_probability or 0:.2f}] {text}")
+        # for RTVI clients (e.g. the /test page); ignored when no client is attached
+        yield RTVIServerMessageFrame(data={"type": "cachos-transcript", "text": text, "language": t.language,
+                                           "probability": t.language_probability, "engine": t.engine})
         yield TranscriptionFrame(text, self._user_id, time_now_iso8601(), _to_pipecat_language(t.language))
 
 
@@ -268,11 +275,15 @@ class CachosTTSService(TTSService):
         raise RuntimeError("; ".join(tried) or f"no voice for {lang!r}")
 
     async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame, None]:
+        new_reply = context_id not in self._context_voice
         try:
             eng, voice, lang = self._pick(text, context_id)
         except Exception as e:
             yield ErrorFrame(error=f"cachos TTS: {e}")
             return
+        if new_reply:
+            yield RTVIServerMessageFrame(data={"type": "cachos-voice", "voice": voice.id, "name": voice.name,
+                                               "language": lang, "engine": eng.name})
         await self.start_tts_usage_metrics(text)
         try:
             # synthesize first so we know the engine's native rate, then let Pipecat resample

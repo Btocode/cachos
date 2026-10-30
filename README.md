@@ -101,6 +101,12 @@ agent.serve(transport="twilio")                  # phone calls (also telnyx, pli
 
 The same from the shell: `cachos chat`, `cachos agent -t webrtc`, `cachos agent -t twilio` (see `cachos agent --help`).
 
+**Test page.** `cachos agent --test-ui` serves http://localhost:7860/test: pick the language, reply
+voice, gender, system prompt and greeting, connect, and talk. Every message shows the detected
+language and its confidence, the voice used for the reply, and timings (speech end → reply,
+STT time, LLM + TTS time); an event log shows the raw events. The page may change these
+settings only because `--test-ui` turns on `allow_client_config`; keep it off in production.
+
 Agent options that matter for quality:
 
 | Option | Default | What it does |
@@ -256,8 +262,22 @@ re-transcribed correctly by Whisper. First reply audio ≈ 6.6–8.6 s on the GT
 Claude CLI as LLM — dominated by Whisper (~3.7 s) and LLM start-up (~2–4 s). With a modern GPU
 or hosted Whisper and a direct LLM API, expect ~1–1.5 s.
 
-**Noise:** GTCRN attenuated pure white noise by ~40 dB (RMS 0.100 → 0.001) at 87 ms CPU per second
-of audio (single thread). Speech-in-noise WER with the denoiser on vs. off is the next measurement.
+**Noise** (same 6 languages through the agent's input pipeline, large-v3, GTX 1650):
+
+| Condition | Languages right | One turn per utterance | Notes |
+|---|---|---|---|
+| Clean | 6/6 | 6/6 | German sentence split by a pause re-assembled correctly |
+| White noise, 5 dB SNR, denoiser on / off | 6/6 / 6/6 | 6/6 / 6/6 | identical transcripts (Whisper hears the original either way); Bengali error 20 → 50 % |
+| **Background talker** (TV/news voice), 5 dB SNR | **2/6** | turns stretched to 10–18 s | Whisper transcribed the TV instead of the caller; denoiser on/off made no difference |
+
+GTCRN attenuated pure white noise by ~40 dB (RMS 0.100 → 0.001) at 87 ms CPU per second of audio.
+
+**Known limitation: other voices in the room.** Noise suppressors (GTCRN, DPDFNet, RNNoise)
+keep *speech* — a TV or a nearby conversation is speech — so a loud background talker is
+heard as the user, and the turn never ends while it keeps talking. Commercial "background voice
+cancellation" (Krisp BVC, LiveKit BVC) is proprietary or cloud-only. Until cachos ships
+target-speaker gating, mitigate with a close-talking / headset microphone, the browser's own
+noise suppression (WebRTC transport), `interrupt_min_words`, and `language_candidates`.
 
 ## Engines and licences
 

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cachos voice test</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #16181d; --muted: #646b78; --line: #e3e6eb;
+    --accent: #2f6fed; --accent-ink: #ffffff; --user: #eaf1ff; --agent: #f1f2f4;
+    --ok: #1f9d55; --warn: #c27c0e; --bad: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101215; --panel: #171a1f; --ink: #e8eaee; --muted: #9aa2af; --line: #2a2f37;
+      --accent: #5b8cff; --accent-ink: #0b0d10; --user: #1c2a45; --agent: #20242b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  header .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.live { color: var(--ok); border-color: var(--ok); }
+  .pill.busy { color: var(--warn); border-color: var(--warn); }
+  .pill.err { color: var(--bad); border-color: var(--bad); }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
+  label:first-child { margin-top: 0; }
+  select, input, textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+                            border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+  textarea { min-height: 84px; resize: vertical; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button { font: inherit; font-weight: 600; border-radius: 9px; padding: 10px 14px; cursor: pointer;
+           border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .controls { display: flex; gap: 8px; margin-top: 16px; }
+  .controls button { flex: 1; }
+  .meter { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 4px; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
+  .meters { margin-top: 16px; display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  #log { display: flex; flex-direction: column; gap: 10px; min-height: 420px; max-height: calc(100vh - 150px); overflow-y: auto; }
+  .empty { color: var(--muted); margin: auto; text-align: center; max-width: 340px; }
+  .msg { max-width: 82%; padding: 9px 12px; border-radius: 12px; }
+  .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 4px; }
+  .msg.agent { align-self: flex-start; background: var(--agent); border-bottom-left-radius: 4px; }
+  .msg.system { align-self: center; color: var(--muted); font-size: 12px; background: none; padding: 2px; }
+  .msg .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px; }
+  .tag.slow { color: var(--warn); border-color: var(--warn); }
+  details { margin-top: 14px; font-size: 12px; color: var(--muted); }
+  #events { max-height: 160px; overflow: auto; font: 11px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cachos voice test</h1>
+  <span id="status" class="pill">disconnected</span>
+  <span class="meta" id="stack">loading…</span>
+</header>
+<main>
+  <section>
+    <label for="language">Spoken language</label>
+    <select id="language"><option value="">Auto-detect (per utterance)</option></select>
+    <label for="voice">Reply voice</label>
+    <select id="voice"><option value="">Auto (matches reply language)</option></select>
+    <div class="row">
+      <div><label for="gender">Voice gender</label>
+        <select id="gender"><option value="">Any</option><option>female</option><option>male</option></select></div>
+      <div><label for="interrupt">Interrupt after</label>
+        <input id="interrupt" type="number" min="0" max="10" placeholder="words (0 = voice)"></div>
+    </div>
+    <label for="prompt">System prompt</label>
+    <textarea id="prompt"></textarea>
+    <label for="greeting">Greeting instruction (agent speaks first)</label>
+    <input id="greeting" placeholder="e.g. Greet the user in one short sentence.">
+    <div class="controls">
+      <button id="connect" class="primary">Connect</button>
+      <button id="mute" disabled>Mute mic</button>
+    </div>
+    <div class="meters">
+      <div>You<div class="meter"><div id="micLevel"></div></div></div>
+      <div>Agent<div class="meter"><div id="botLevel"></div></div></div>
+    </div>
+    <p class="note">Settings apply when you connect. Use headphones or rely on the browser's echo cancellation.
+      "Interrupt after" ≥ 2 words also enables pause-and-resume when you cough over the agent.</p>
+  </section>
+  <section>
+    <div id="log"><p class="empty" id="empty">Connect, allow the microphone, and start talking in any language.
+      Each message shows the detected language, the voice used for the reply, and timings.</p></div>
+    <details><summary>Event log</summary><div id="events"></div></details>
+  </section>
+</main>
+<audio id="botAudio" autoplay></audio>
+<script type="module">
+import { PipecatClient } from "https://cdn.jsdelivr.net/npm/@pipecat-ai/client-js@1.16.0/+esm";
+import { SmallWebRTCTransport } from "https://cdn.jsdelivr.net/npm/@pipecat-ai/small-webrtc-transport@1.11.2/+esm";
+
+const $ = (id) => document.getElementById(id);
+const log = $("log"), events = $("events");
+let client = null, config = null, micOn = true;
+let userMsg = null, agentMsg = null, agentSegments = new Map();
+let lastVoiceAt = 0, turnEndAt = 0, sttLatency = null, replyVoice = null;
+
+function status(text, kind = "") { const s = $("status"); s.textContent = text; s.className = "pill " + kind; }
+function event(name, data) {
+  const line = `${new Date().toISOString().slice(11, 23)} ${name}${data !== undefined ? " " + JSON.stringify(data) : ""}\n`;
+  events.textContent = (line + events.textContent).slice(0, 20000);
+}
+function bubble(kind, text = "") {
+  $("empty")?.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + kind;
+  el.innerHTML = `<div class="text"></div><div class="tags"></div>`;
+  el.querySelector(".text").textContent = text;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+function tag(el, text, slow = false) {
+  const t = document.createElement("span");
+  t.className = "tag" + (slow ? " slow" : "");
+  t.textContent = text;
+  el.querySelector(".tags").appendChild(t);
+}
+const secs = (ms) => (ms / 1000).toFixed(1) + " s";
+
+async function loadConfig() {
+  try {
+    config = await (await fetch("/cachos/config")).json();
+  } catch (e) { $("stack").textContent = "could not load /cachos/config"; return; }
+  const d = config.defaults;
+  $("stack").textContent = `STT ${config.stt} · LLM ${config.llm} · ${config.voices.length} voices`;
+  const names = new Intl.DisplayNames(["en"], { type: "language" });
+  const nice = (c) => { try { return `${names.of(c)} (${c})`; } catch { return c; } };
+  for (const c of config.languages) $("language").add(new Option(nice(c), c));
+  $("language").value = d.language || "";
+  $("gender").value = d.gender || "";
+  $("prompt").value = d.system_prompt || "";
+  $("greeting").value = d.greeting || "";
+  $("interrupt").value = d.interrupt_min_words || "";
+  fillVoices(d.voice);
+}
+function fillVoices(selected) {
+  const lang = $("language").value, sel = $("voice");
+  sel.length = 1;
+  const vs = config.voices.filter((v) => !lang || v.languages.includes(lang) || v.languages.includes("*"));
+  for (const v of vs.slice(0, 400)) sel.add(new Option(`${v.id}${v.gender ? " · " + v.gender : ""}`, v.id));
+  sel.value = selected && vs.some((v) => v.id === selected) ? selected : "";
+}
+$("language").onchange = () => fillVoices($("voice").value);
+
+function onServerMessage(m) {
+  event("server", m);
+  if (m?.type === "cachos-transcript") {
+    if (!userMsg) { userMsg = bubble("user"); agentMsg = null; }
+    const t = userMsg.querySelector(".text");
+    t.textContent = (t.textContent ? t.textContent + " " : "") + m.text;
+    if (!userMsg.dataset.lang) {
+      userMsg.dataset.lang = m.language;
+      tag(userMsg, `${m.language}${m.probability != null ? " · p=" + m.probability.toFixed(2) : ""}`,
+          m.probability != null && m.probability < 0.75);
+    }
+  } else if (m?.type === "cachos-stt-latency") {
+    sttLatency = m.seconds;
+  } else if (m?.type === "cachos-voice") {
+    replyVoice = m;
+  }
+}
+
+function startAgentMessage() {
+  if (agentMsg) return;
+  agentMsg = bubble("agent");
+  agentSegments = new Map();
+  if (replyVoice) tag(agentMsg, `${replyVoice.voice} · ${replyVoice.language}`);
+  const now = performance.now();
+  if (lastVoiceAt) tag(agentMsg, `replied ${secs(now - lastVoiceAt)} after you stopped`, now - lastVoiceAt > 3000);
+  if (sttLatency != null) tag(agentMsg, `STT ${sttLatency.toFixed(1)} s`);
+  if (turnEndAt) tag(agentMsg, `LLM+TTS ${secs(now - turnEndAt)}`);
+  userMsg = null; sttLatency = null; replyVoice = null;
+}
+
+async function connect() {
+  $("connect").disabled = true;
+  status("connecting…", "busy");
+  const body = {
+    language: $("language").value, voice: $("voice").value, gender: $("gender").value,
+    system_prompt: $("prompt").value, greeting: $("greeting").value,
+    interrupt_min_words: Number($("interrupt").value) || 0,
+  };
+  client = new PipecatClient({
+    transport: new SmallWebRTCTransport(),
+    enableMic: true, enableCam: false,
+    callbacks: {
+      onConnected: () => { status("connected", "live"); event("connected"); },
+      onBotReady: () => { status("listening", "live"); bubble("system", "agent ready — start talking"); },
+      onDisconnected: () => { status("disconnected"); event("disconnected"); reset(); },
+      onTrackStarted: (track, p) => {
+        if (!p?.local && track.kind === "audio") { $("botAudio").srcObject = new MediaStream([track]); $("botAudio").play().catch(() => {}); }
+      },
+      onUserStartedSpeaking: () => { status("you're speaking", "busy"); event("user-started"); },
+      onUserStoppedSpeaking: () => { turnEndAt = performance.now(); status("thinking…", "busy"); event("user-stopped (turn end)"); },
+      onBotStartedSpeaking: () => { status("agent speaking", "live"); startAgentMessage(); event("bot-started"); },
+      onBotStoppedSpeaking: () => { status("listening", "live"); event("bot-stopped"); },
+      onUserTranscript: (t) => {
+        event("user-transcript", t);
+        if (t.final && !userMsg) { userMsg = bubble("user", t.text); agentMsg = null; }
+      },
+      onBotOutput: (o) => {
+        if (o.spoken_status === "in-progress") return;
+        if (!agentMsg) startAgentMessage();
+        agentSegments.set(o.segment_id ?? agentSegments.size, o.text);
+        agentMsg.querySelector(".text").textContent = [...agentSegments.values()].join(" ");
+        log.scrollTop = log.scrollHeight;
+      },
+      onServerMessage,
+      onLocalAudioLevel: (l) => { $("micLevel").style.width = Math.min(100, l * 300) + "%"; if (l > 0.03) lastVoiceAt = performance.now(); },
+      onRemoteAudioLevel: (l) => { $("botLevel").style.width = Math.min(100, l * 300) + "%"; },
+      onError: (e) => { status("error", "err"); event("error", e); bubble("system", "error: " + JSON.stringify(e?.data ?? e)); },
+    },
+  });
+  try {
+    await client.startBotAndConnect({ endpoint: "/start", requestData: { transport: "webrtc", body } });
+    $("connect").textContent = "Disconnect"; $("connect").disabled = false; $("mute").disabled = false;
+  } catch (e) {
+    status("could not connect", "err"); event("connect-error", String(e));
+    bubble("system", "could not connect: " + e); reset();
+  }
+}
+function reset() {
+  client = null; userMsg = agentMsg = null;
+  $("connect").textContent = "Connect"; $("connect").disabled = false;
+  $("mute").disabled = true; $("mute").textContent = "Mute mic"; micOn = true;
+}
+$("connect").onclick = async () => {
+  if (client) { $("connect").disabled = true; await client.disconnect(); reset(); status("disconnected"); }
+  else await connect();
+};
+$("mute").onclick = () => { micOn = !micOn; client?.enableMic(micOn); $("mute").textContent = micOn ? "Mute mic" : "Unmute mic"; };
+loadConfig();
+</script>
+</body>
+</html>
