@@ -39,5 +39,24 @@
     "@pipecat-ai/small-webrtc-transport": {
       "optional": true
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Btocode/cachos.git",
+    "directory": "clients/ts"
+  },
+  "homepage": "https://github.com/Btocode/cachos/tree/main/clients/ts#readme",
+  "bugs": {
+    "url": "https://github.com/Btocode/cachos/issues"
+  },
+  "keywords": [
+    "voice-agent",
+    "speech-to-text",
+    "text-to-speech",
+    "pipecat",
+    "webrtc",
+    "multilingual",
+    "whisper",
+    "tts"
+  ]
 }

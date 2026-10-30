@@ -13,6 +13,11 @@ dependencies = [
     "blingfire>=0.1.8",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Btocode/cachos"
+Repository = "https://github.com/Btocode/cachos"
+Issues = "https://github.com/Btocode/cachos/issues"
+
 [project.optional-dependencies]
 # --- speech-to-text ---
 faster-whisper = ["faster-whisper>=1.1"]
