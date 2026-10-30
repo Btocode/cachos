@@ -41,6 +41,8 @@ class TTSEngine(ABC):
         out = [*self._voices, *self._cloned.values()]
         if language:
             out = [v for v in out if v.supports(language)]
+            lang = normalize_language(language)
+            out.sort(key=lambda v: v.languages[0] != lang)  # native voices before multilingual ones
         if gender:
             out = [v for v in out if v.gender == gender]
         return out

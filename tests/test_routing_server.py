@@ -109,3 +109,12 @@ def test_server_auth():
     c = TestClient(create_app(STT(FakeSTT()), TTS([FakeTTS()]), api_key="sekret"))
     assert c.get("/v1/voices").status_code == 401
     assert c.get("/v1/voices", headers={"Authorization": "Bearer sekret"}).status_code == 200
+
+
+def test_voice_listing_puts_native_voices_before_multilingual():
+    from cachos.types import Voice
+
+    eng = FakeTTS("m", ["fr"])
+    eng._voices = [Voice("m:multi", "Multi", "m", ["de", "*"], "female"), *eng.list_voices()]
+    ids = [v.id for v in eng.voices(language="fr")]
+    assert ids[-1] == "m:multi" and ids[0].startswith("m:fr")
