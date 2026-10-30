@@ -1,0 +1,10 @@
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+clients/ts/node_modules
+clients/ts/dist
+dist
+build
+*.egg-info
+.git

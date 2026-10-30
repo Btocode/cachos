@@ -1,0 +1,74 @@
+[project]
+name = "cachos"
+version = "0.1.0"
+description = "One API for multilingual speech-to-text, text-to-speech and real-time voice agents, over the best open-source engines."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Afsan" }]
+keywords = ["voice-agent", "speech-to-text", "text-to-speech", "whisper", "tts", "stt", "asr", "vad"]
+dependencies = [
+    "numpy>=1.24",
+    "langcodes[data]>=3.4",
+    "blingfire>=0.1.8",
+]
+
+[project.optional-dependencies]
+# --- speech-to-text ---
+faster-whisper = ["faster-whisper>=1.1"]
+# --- text-to-speech ---
+kokoro = ["kokoro-onnx>=0.4"]
+# Kokoro's Japanese/Mandarin voices need its misaki G2P (otherwise ja/zh route to Piper/Edge)
+kokoro-cjk = ["cachos[kokoro]", "misaki[ja,zh]>=0.9"]
+piper = ["piper-tts>=1.3"]
+edge = ["edge-tts>=7.0"]
+xtts = ["coqui-tts>=0.26"]
+chatterbox = ["chatterbox-tts>=0.1.2"]
+mms = ["transformers>=4.40", "torch>=2.1"]
+# --- real-time agents (runtime: Pipecat; denoise: sherpa-onnx GTCRN/DPDFNet) ---
+agent = [
+    "pipecat-ai[silero,webrtc,websocket,runner]>=1.15,<1.16",  # Smart Turn v3.2 ONNX ships in the base package
+    "sherpa-onnx>=1.12",
+]
+dpdfnet = ["dpdfnet>=0.6"]
+# NVIDIA GPU for faster-whisper (CTranslate2 needs CUDA 12 cuBLAS + cuDNN 9)
+cuda = ["nvidia-cublas-cu12", "nvidia-cudnn-cu12>=9,<10"]
+# --- infra ---
+langdetect = ["lingua-language-detector>=2.0"]
+audio = ["soundfile>=0.12", "soxr>=0.3"]
+# mic + speakers for `cachos chat` / VoiceAgent.run_local() (PyAudio needs PortAudio: apt install portaudio19-dev)
+mic = ["sounddevice>=0.4", "pipecat-ai[local]>=1.15,<1.16"]
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
+openai = ["httpx>=0.27"]
+# Sensible CPU-friendly bundle: auto-lang STT + 3 TTS engines covering 100+ languages
+recommended = [
+    "cachos[faster-whisper,kokoro,piper,edge,agent,langdetect,audio,server,openai]",
+]
+all = ["cachos[recommended,xtts,chatterbox,mms,mic]"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27", "cachos[server,audio]"]
+
+[project.scripts]
+cachos = "cachos.cli:main"
+
+[project.entry-points."cachos.engines"]
+# Third-party packages register engines in *their* pyproject, e.g.
+#   [project.entry-points."cachos.engines"]
+#   mytts = "my_pkg.tts:MyTTS"          # an STTEngine/TTSEngine subclass, or
+#   more = "my_pkg.engines:register"    # a function calling cachos.register_tts(...)
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cachos"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/cachos", "tests", "examples", "docs", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["integration: needs real models / network (run with -m integration)"]
+addopts = "-m 'not integration'"

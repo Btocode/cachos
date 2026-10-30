@@ -1,0 +1,43 @@
+{
+  "name": "@cachos/client",
+  "version": "0.1.0",
+  "description": "TypeScript client for cachos: multilingual STT/TTS REST API (browser + Node) and real-time voice agents (browser, WebRTC)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@pipecat-ai/client-js": "^1.16.0",
+    "@pipecat-ai/small-webrtc-transport": "^1.11.2"
+  },
+  "peerDependencies": {
+    "@pipecat-ai/client-js": "^1.16.0",
+    "@pipecat-ai/small-webrtc-transport": "^1.11.2"
+  },
+  "peerDependenciesMeta": {
+    "@pipecat-ai/client-js": {
+      "optional": true
+    },
+    "@pipecat-ai/small-webrtc-transport": {
+      "optional": true
+    }
+  }
+}
